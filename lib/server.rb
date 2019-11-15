@@ -23,11 +23,12 @@ class Value < Struct.new(:val, :time)
 end
 
 class Server
-  def initialize(address, port, logger)
+  def initialize(address, port, logger, params = {})
     @store = Concurrent::Hash.new
     @nodes = Concurrent::Hash.new
     @logger = logger
     @port = port.to_i
+    @params = params
   end
 
   def start
@@ -60,7 +61,7 @@ class Server
           end
 
 
-          replicate_command_to_nodes(command, key, val)
+          replicate_command_to_nodes(command, key, val) if val
 
           client.puts response
         end
@@ -126,7 +127,7 @@ class Server
 
   def store_value(key, value, time)
     time = Time.now.utc unless time
-    time = time.to_f
+    time = time.to_f + @params[:offset].to_f
     val = @store[key]
     if val.nil? || time >= val.time
       @store[key] = Value.new value, time

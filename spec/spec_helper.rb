@@ -35,11 +35,11 @@ class Client
   end
 end
 
-def start_server(port)
+def start_server(port, params = {})
   @pids << fork do
     trap('TERM') { exit }
 
-    server = Server.new 'localhost', port, Logger.new(nil)
+    server = Server.new 'localhost', port, Logger.new(nil), offset: params[:offset]
     server.start
   end
   sleep 0.1
