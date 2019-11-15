@@ -46,8 +46,8 @@ describe Server do
     second_client.cmd('LIST').should eq ['1', 'key']
 
     second_client.cmd 'ADD_NODE localhost 2222'
-    sleep 0.3
     second_client.cmd 'PUT val 2'
+    sleep 0.3
 
     third_client.cmd('LIST').should eq ['2', 'key', 'val']
   end
