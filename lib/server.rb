@@ -15,6 +15,7 @@ require 'irb'
 #
 # SYS_ADD_NODE
 # SYS_REMOVE_NODE ip port
+# XPUT sleep 5 seconds afte commit, for testing purposes
 
 Thread.abort_on_exception = true
 
@@ -57,6 +58,10 @@ class Server
 
 
           if ['PUT', 'DEL'].include? command
+            if @delay_sync
+              sleep @delay_sync
+              @delay_sync = nil
+            end
             @nodes.values.each do |node|
               if command == 'PUT'
                 node.puts "SYS_PUT #{key} #{value}"
@@ -118,6 +123,10 @@ class Server
         @nodes[node_name] = node
         @logger.info "Node #{node_name} added as parent"
       end
+    when 'XPUT'
+      @store[key] = value
+      @delay_sync = 5
+      'ok'
     end
   end
 

@@ -1,31 +1,9 @@
 require 'spec_helper'
 
 describe Server do
-  def start_server(pids, port)
-    pids << fork do
-      trap('TERM') { exit }
-
-      server = Server.new 'localhost', port, Logger.new(nil)
-      server.start
-    end
-    sleep 0.3
-  end
-
-  before do
-    @pids = []
-    start_server @pids, 9876
-  end
-
-  after do
-    @pids.each do |pid|
-      Process.kill :TERM, pid
-    end
-    sleep 0.3
-    @pids.clear
-  end
-
   it 'PUT and GET works' do
-    client = Client.new 
+    start_server 9876
+    client = Client.new 9876
 
     client.cmd 'PUT key 1' 
 
@@ -33,7 +11,8 @@ describe Server do
   end
 
   it 'LIST works' do
-    client = Client.new 
+    start_server 9876
+    client = Client.new 9876
 
     client.cmd 'PUT key 1' 
     client.cmd 'PUT val 2' 
@@ -42,7 +21,8 @@ describe Server do
   end
 
   it 'DEL works' do
-    client = Client.new 
+    start_server 9876
+    client = Client.new 9876
 
     client.cmd 'PUT key 1' 
     client.cmd 'PUT val 1' 
@@ -52,26 +32,23 @@ describe Server do
   end
 
   it 'adds a new node' do
-  end
+    start_server 9876
+    start_server 1111
+    start_server 2222
 
-  class Client
-    def initialize
-      @client = TCPSocket.new 'localhost', 9876
-    end
+    client = Client.new 9876
+    second_client = Client.new 1111
+    third_client = Client.new 2222
 
-    def cmd(cmd)
-      @client.puts cmd
+    client.cmd 'PUT key 1'
+    client.cmd 'ADD_NODE localhost 1111'
+    sleep 0.3
+    second_client.cmd('LIST').should eq ['1', 'key']
 
-      if cmd == 'LIST'
-        res = [@client.gets.strip]
-        res[0].to_i.times do
-          res << @client.gets.strip
-        end
+    second_client.cmd 'ADD_NODE localhost 2222'
+    sleep 0.3
+    second_client.cmd 'PUT val 2'
 
-        res
-      else
-        @client.gets.strip
-      end
-    end
+    third_client.cmd('LIST').should eq ['2', 'key', 'val']
   end
 end
