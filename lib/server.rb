@@ -42,9 +42,9 @@ class Server
 
         loop do
           begin
-            command, key, value = client.gets.split ' '
+            command, key, value, time = client.gets.split ' '
             command.upcase!
-            @logger.info "#{client_info} send #{command}"
+            @logger.info "#{client_info} send #{command} #{key} #{value} #{time}"
 
             if command == 'QUIT'
               client.close                
@@ -52,7 +52,7 @@ class Server
               break
             end
 
-            response = process(command, key, value)
+            response, val = process(command, key, value, time)
 
           rescue => e
             response = "error #{e}"
@@ -60,7 +60,7 @@ class Server
           end
 
 
-          replicate_command_to_nodes(command, key, value)
+          replicate_command_to_nodes(command, key, val)
 
           client.puts response
         end
@@ -68,11 +68,15 @@ class Server
     end
   end
 
-  def process(command, key, value)
+  def process(command, key, value, time)
     case command
     when 'PUT', 'SYS_PUT'
-      store_value(key, value)
-      'ok'
+      val = store_value(key, value, time)
+      ['ok', val]
+    when 'XPUT'
+      val = store_value(key, value, time)
+      @delay_sync = 1
+      ['ok', val]
     when 'GET'
       val = @store[key]
       if val
@@ -102,6 +106,7 @@ class Server
         node.puts "SYS_ADD_SELF localhost #{@port}"
 
         sync_data_to_node(node)
+        @logger.info "Node #{node_name} database synched"
         'ok'
       end
     when 'REMOVE_NODE'
@@ -116,25 +121,25 @@ class Server
         @nodes[node_name] = node
         @logger.info "Node #{node_name} added as parent"
       end
-    when 'XPUT'
-      store_value(key, value)
-      @delay_sync = 1
-      'ok'
     end
   end
 
-  def store_value(key, value)
-    @store[key] = Value.new value, Time.now.utc
+  def store_value(key, value, time)
+    time = Time.now.utc unless time
+    time = time.to_f
+    val = @store[key]
+    if val.nil? || time >= val.time
+      @store[key] = Value.new value, time
+    end
   end
 
   def sync_data_to_node(node)
     @store.each do |k, v|
       node.puts "SYS_PUT #{k} #{v.val}"
     end
-    @logger.info "Node #{node_name} database synched"
   end
 
-  def replicate_command_to_nodes(command, key, value)
+  def replicate_command_to_nodes(command, key, val)
     if ['PUT', 'XPUT', 'DEL'].include? command
       if @delay_sync
         sleep @delay_sync
@@ -142,9 +147,9 @@ class Server
       end
       @nodes.values.each do |node|
         if command == 'PUT' || command == 'XPUT'
-          node.puts "SYS_PUT #{key} #{value}"
+          node.puts "SYS_PUT #{key} #{val.val} #{val.time}"
         elsif command == 'DEL'
-          node.puts "SYS_DEL #{key} #{value}"
+          node.puts "SYS_DEL #{key} #{val.val} #{val.time}"
         end
       end
     end
